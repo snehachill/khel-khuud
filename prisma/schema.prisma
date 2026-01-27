@@ -6,18 +6,123 @@
 
 generator client {
   provider = "prisma-client"
-   output   = "../src/generated/prisma"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
 }
 
+// --------------------------------------------------------
+// 2. ENUMS
+// --------------------------------------------------------
+enum Role {
+  CUSTOMER
+  OWNER
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING // Payment initiated but not finished
+  CONFIRMED // Payment successful
+  CANCELLED // Refunded or user cancelled
+  COMPLETED // Event has passed
+}
+
+enum SportType {
+  BADMINTON
+  CRICKET
+  FOOTBALL
+  TENNIS
+  TABLE_TENNIS
+  BASKETBALL
+  SWIMMING
+  VOLLEYBALL
+  OTHER
+}
+
+// --------------------------------------------------------
+// 3. MODELS
+// --------------------------------------------------------
+
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String?
+  id       String  @id @default(cuid())
+  email    String  @unique
+  password String 
+  name     String
+  phone    String
+  avatar   String?
+  role     Role    @default(CUSTOMER)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // RELATIONS for Owner
+  venues   Venue[]   @relation("OwnerVenues") 
+
+  // Relation for customers
+  bookings Booking[] // If user is a Customer
 }
+
+model Venue {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  address     String
+  city        String
+  images      String[] // Array of image URLs
+
+  ownerId String
+  owner   User   @relation("OwnerVenues", fields: [ownerId], references: [id])
+
+  
+  isApproved Boolean @default(false) 
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // RELATIONS
+  courts  Court[]
+  
+}
+
+model Court {
+  id           String    @id @default(cuid())
+  name         String // e.g., "Court 1", "Turf A"
+  sportType    SportType
+  pricePerHour Decimal   @db.Decimal(10, 2)
+
+  venueId String
+  venue   Venue  @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // RELATIONS
+  bookings Booking[]
+}
+
+model Booking {
+  id String @id @default(cuid())
+
+  // --- SLOT LOGIC START ---
+  date   DateTime @db.Date // Stores the specific day (e.g. 2026-01-31)
+  slotId String // The fixed ID of the slot (e.g. "SLOT_18_21")
+  // --- SLOT LOGIC END ---
+
+  totalPrice Decimal       @db.Decimal(10, 2)
+  status     BookingStatus @default(CONFIRMED)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  courtId String
+  court   Court  @relation(fields: [courtId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+
+  @@unique([courtId, date, slotId])
+}
+
